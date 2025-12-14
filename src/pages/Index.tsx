@@ -4,38 +4,58 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Music, Users, Headphones, Radio, ArrowRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { useRoom } from "@/hooks/useRoom";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
   const navigate = useNavigate();
   const [roomCode, setRoomCode] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
-
-  const generateRoomCode = () => {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
+  const { createRoom } = useRoom();
 
   const handleCreateRoom = async () => {
     setIsCreating(true);
-    const code = generateRoomCode();
-    // Simulate creation delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    toast.success("Room created successfully!");
-    navigate(`/room/${code}?host=true`);
+    try {
+      const code = await createRoom();
+      if (code) {
+        toast.success("Room created successfully!");
+        navigate(`/room/${code}`);
+      }
+    } catch (error) {
+      toast.error("Failed to create room");
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
     if (!roomCode.trim()) {
       toast.error("Please enter a room code");
       return;
     }
+    
     setIsJoining(true);
-    navigate(`/room/${roomCode.toUpperCase()}`);
+    try {
+      // Validate room exists
+      const { data } = await supabase
+        .from("rooms")
+        .select("id")
+        .eq("code", roomCode.toUpperCase())
+        .eq("is_active", true)
+        .maybeSingle();
+
+      if (!data) {
+        toast.error("Room not found or inactive");
+        setIsJoining(false);
+        return;
+      }
+
+      navigate(`/room/${roomCode.toUpperCase()}`);
+    } catch (error) {
+      toast.error("Failed to join room");
+      setIsJoining(false);
+    }
   };
 
   return (
